@@ -4,6 +4,7 @@ import PlayCircle from "@mui/icons-material/PlayCircle";
 import PauseCircle from "@mui/icons-material/PauseCircle";
 import StopCircle from "@mui/icons-material/StopCircle";
 import * as fabric from "fabric";
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from "@mui/material";
 
 const tools = [
     { name: "Import", icon: "📂" },
@@ -13,6 +14,7 @@ const tools = [
     { name: "Animation", icon: "🎭" },
     { name: "Add Sound", icon: "🎵" },
 ];
+
 
 const imageData = [
     { id: 1, name: "Sunset View", src: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/17/e0/ce/85/sunset-beach.jpg?w=900&h=500&s=1" },
@@ -29,6 +31,14 @@ const imageData = [
     { id: 12, name: "Lake Reflection", src: "https://images.squarespace-cdn.com/content/v1/5893534986e6c00851e56dbb/1586968790997-JSYX8A9NP750GGCRK6RA/Emerald+Lake+2+minutes+Kristen+Ryan+Photography-001.jpg" },
 ];
 
+const textAnimations = [
+    { name: "Fade In & Out", key: "fade" },
+    { name: "Slide Left to Right", key: "slide" },
+    { name: "Bounce Effect", key: "bounce" },
+    { name: "Rotate", key: "rotate" },
+    { name: "Zoom In & Out", key: "scale" },
+];
+
 const FestivalDetail = () => {
     const { id } = useParams();
     const selectedImage = imageData.find((image) => image.id === parseInt(id));
@@ -41,9 +51,10 @@ const FestivalDetail = () => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentFrame, setCurrentFrame] = useState(0);
     const totalFrames = 10; // Number of frames in the timeline
+    const [openAnimationModal, setOpenAnimationModal] = useState(false);
 
+    // Initialize Fabric.js Canvas
     useEffect(() => {
-        console.log("Initializing canvas...");
         if (!canvasRef.current || !selectedImage) return;
 
         if (canvas) {
@@ -56,7 +67,6 @@ const FestivalDetail = () => {
             backgroundColor: "#fff",
         });
 
-        console.log("New canvas created:", newCanvas);
         setCanvas(newCanvas);
 
         const imgElement = new Image();
@@ -64,17 +74,61 @@ const FestivalDetail = () => {
         imgElement.src = selectedImage.src;
 
         imgElement.onload = () => {
-            console.log("Selected image loaded:", imgElement.src);
-            const fabricImage = new fabric.Image(imgElement);
+            const fabricImage = new fabric.Image(imgElement, {
+                left: 50,
+                top: 50,
+                selectable: true,
+            });
             fabricImage.scaleToWidth(300);
             fabricImage.scaleToHeight(200);
             newCanvas.add(fabricImage);
             newCanvas.renderAll();
-            console.log("Image added to canvas!");
         };
+
+        // Handle text selection
+        newCanvas.on("selection:created", (event) => {
+            if (event.selected[0]?.type === "i-text") {
+                setActiveText(event.selected[0]);
+            }
+        });
+
+        newCanvas.on("selection:updated", (event) => {
+            if (event.selected[0]?.type === "i-text") {
+                setActiveText(event.selected[0]);
+            }
+        });
 
         return () => newCanvas.dispose();
     }, [selectedImage]);
+
+    // Handle Image Upload
+    const handleImageUpload = (event) => {
+        if (!canvas) return;
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const imgElement = new Image();
+            imgElement.src = e.target.result;
+            imgElement.crossOrigin = "anonymous";
+            imgElement.onload = () => {
+                const imgInstance = new fabric.Image(imgElement, {
+                    left: 50,
+                    top: 50,
+                    selectable: true,
+                });
+
+                imgInstance.scaleToWidth(300);
+                imgInstance.scaleToHeight(200);
+                canvas.add(imgInstance);
+                canvas.renderAll();
+            };
+        };
+        reader.readAsDataURL(file);
+    };
+
+
 
     const handleToolClick = (toolName) => {
         if (!canvas) return;
@@ -105,19 +159,15 @@ const FestivalDetail = () => {
                 });
                 canvas.add(text);
                 canvas.setActiveObject(text);
-                setActiveText(text);
+                setActiveText(text); // Ensure active text is set
                 canvas.renderAll();
                 break;
 
-
-
             case "Animation":
-                const activeObject = canvas.getActiveObject();
-                if (activeObject) {
-                    activeObject.animate("angle", "+=360", {
-                        duration: 1000,
-                        onChange: canvas.renderAll.bind(canvas),
-                    });
+                if (activeText) {
+                    setOpenAnimationModal(true); // Open animation modal only if text is selected
+                } else {
+                    alert("Please select a text object first.");
                 }
                 break;
 
@@ -129,59 +179,108 @@ const FestivalDetail = () => {
 
             case "Import":
                 if (fileInputRef.current) {
-                    fileInputRef.current.click(); // Use ref instead of getElementById
+                    fileInputRef.current.click();
                 }
                 break;
 
             default:
                 break;
         }
-
     };
 
+    const handleAnimationSelect = (animation) => {
+        if (!activeText || !canvas) return;
 
-
-    const handleImageUpload = (event) => {
-        if (!canvas) {
-            console.log("Canvas is not initialized!");
-            return;
-        }
-
-        const file = event.target.files[0];
-
-        if (!file) {
-            console.log("No file selected");
-            return;
-        }
-
-        console.log("File selected:", file);
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            console.log("Image loaded from file:", e.target.result);
-
-            // Ensure image loads correctly in Fabric.js
-            const imgElement = new Image();
-            imgElement.src = e.target.result;
-            imgElement.crossOrigin = "anonymous";
-            imgElement.onload = () => {
-                const imgInstance = new fabric.Image(imgElement, {
-                    left: 50,
-                    top: 50,
-                    selectable: true,
-                });
-
-                imgInstance.scaleToWidth(300);
-                imgInstance.scaleToHeight(200);
-                canvas.add(imgInstance);
-                canvas.setActiveObject(imgInstance);
+        switch (animation.key) {
+            case "fade":
+                activeText.set({ opacity: 0 });
                 canvas.renderAll();
+                fabric.util.animate({
+                    startValue: 0,
+                    endValue: 1,
+                    duration: 1000,
+                    onChange: (value) => {
+                        activeText.set({ opacity: value });
+                        canvas.renderAll();
+                    },
+                });
+                break;
 
-                console.log("Image added to canvas!");
-            };
-        };
+            case "slide":
+                const startLeft = activeText.left;
+                activeText.set({ left: startLeft - 100 });
+                fabric.util.animate({
+                    startValue: startLeft - 100,
+                    endValue: startLeft,
+                    duration: 1000,
+                    onChange: (value) => {
+                        activeText.set({ left: value });
+                        canvas.renderAll();
+                    },
+                });
+                break;
 
-        reader.readAsDataURL(file);
+            case "bounce":
+                fabric.util.animate({
+                    startValue: 1,
+                    endValue: 1.3,
+                    duration: 500,
+                    onChange: (value) => {
+                        activeText.scale(value);
+                        canvas.renderAll();
+                    },
+                    onComplete: () => {
+                        fabric.util.animate({
+                            startValue: 1.3,
+                            endValue: 1,
+                            duration: 500,
+                            onChange: (value) => {
+                                activeText.scale(value);
+                                canvas.renderAll();
+                            },
+                        });
+                    },
+                });
+                break;
+
+            case "rotate":
+                fabric.util.animate({
+                    startValue: 0,
+                    endValue: 360,
+                    duration: 1000,
+                    onChange: (value) => {
+                        activeText.set({ angle: value });
+                        canvas.renderAll();
+                    },
+                });
+                break;
+
+            case "scale":
+                fabric.util.animate({
+                    startValue: 1,
+                    endValue: 1.5,
+                    duration: 1000,
+                    onChange: (value) => {
+                        activeText.scale(value);
+                        canvas.renderAll();
+                    },
+                    onComplete: () => {
+                        fabric.util.animate({
+                            startValue: 1.5,
+                            endValue: 1,
+                            duration: 1000,
+                            onChange: (value) => {
+                                activeText.scale(value);
+                                canvas.renderAll();
+                            },
+                        });
+                    },
+                });
+                break;
+
+            default:
+                break;
+        }
     };
 
 
@@ -212,12 +311,21 @@ const FestivalDetail = () => {
         }
     };
 
-
     const updateTextStyle = (style, value) => {
         if (!canvas || !activeText) return;
-        activeText.set(style, value);
-        canvas.renderAll();
+    
+        if (style === "textDecoration") {
+            activeText.set("underline", value === "underline");
+        } else {
+            activeText.set(style, value);
+        }
+    
+        activeText.setCoords(); // Ensures correct positioning
+        canvas.renderAll(); // Re-renders canvas
     };
+    
+    
+
 
     return (
         <div className="flex flex-col mx-auto items-center justify-center bg-gray-200 min-h-screen -mt-6 relative">
@@ -257,44 +365,91 @@ const FestivalDetail = () => {
             {/* Sticky Text Formatting Panel */}
             {activeText && (
                 <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-white p-3 shadow-lg flex gap-2 rounded">
-                    <button onClick={() => updateTextStyle("fontWeight", activeText.fontWeight === "bold" ? "normal" : "bold")} className="p-2 bg-gray-300 font-bold">B</button>
-                    <button onClick={() => updateTextStyle("fontStyle", activeText.fontStyle === "italic" ? "normal" : "italic")} className="p-2 bg-gray-300 italic">I</button>
-                    <button onClick={() => updateTextStyle("textDecoration", activeText.textDecoration === "underline" ? "none" : "underline")} className="p-2 bg-gray-300 underline">U</button>
+                    {/* Bold Button */}
+                    <button
+                        onClick={() => updateTextStyle("fontWeight", activeText.fontWeight === "bold" ? "normal" : "bold")}
+                        className="p-2 bg-gray-300 font-bold"
+                    >
+                        B
+                    </button>
 
-                    <select onChange={(e) => updateTextStyle("fontSize", parseInt(e.target.value))} className="p-2 bg-gray-300">
+                    {/* Italic Button */}
+                    <button
+                        onClick={() => updateTextStyle("fontStyle", activeText.fontStyle === "italic" ? "normal" : "italic")}
+                        className="p-2 bg-gray-300 italic"
+                    >
+                        I
+                    </button>
+
+                    {/* Underline Button */}
+                    <button
+                        onClick={() => updateTextStyle("textDecoration", activeText.textDecoration === "underline" ? "none" : "underline")}
+                        className="p-2 bg-gray-300 underline"
+                    >
+                        U
+                    </button>
+
+                    {/* Font Size Selector */}
+                    <select
+                        defaultValue={activeText.fontSize}
+                        onChange={(e) => updateTextStyle("fontSize", parseInt(e.target.value))}
+                        className="p-2 bg-gray-300"
+                    >
                         {[10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 52, 56, 60, 64, 70, 80, 96, 100, 120, 150, 200, 240].map((size) => (
-                            <option key={size} value={size} selected={activeText.fontSize === size}>
+                            <option key={size} value={size}>
                                 {size}px
                             </option>
                         ))}
                     </select>
-                    <select onChange={(e) => updateTextStyle("fontFamily", e.target.value)} className="p-2 bg-gray-300">
-                        <option value="Arial">Arial</option>
-                        <option value="Roboto">Roboto</option>
-                        <option value="Sans-serif">Sans-serif</option>
-                        <option value="Algerian">Algerian</option>
-                        <option value="Courier New">Courier New</option>
-                        <option value="Georgia">Georgia</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="Verdana">Verdana</option>
-                        <option value="Tahoma">Tahoma</option>
-                        <option value="Trebuchet MS">Trebuchet MS</option>
-                        <option value="Comic Sans MS">Comic Sans MS</option>
-                        <option value="Impact">Impact</option>
-                        <option value="Garamond">Garamond</option>
-                        <option value="Lucida Console">Lucida Console</option>
-                        <option value="Palatino Linotype">Palatino Linotype</option>
-                        <option value="Monospace">Monospace</option>
+
+                    {/* Font Family Selector */}
+                    <select
+                        defaultValue={activeText.fontFamily}
+                        onChange={(e) => updateTextStyle("fontFamily", e.target.value)}
+                        className="p-2 bg-gray-300"
+                    >
+                        {["Arial", "Roboto", "Sans-serif", "Algerian", "Courier New", "Georgia", "Times New Roman",
+                            "Verdana", "Tahoma", "Trebuchet MS", "Comic Sans MS", "Impact", "Garamond",
+                            "Lucida Console", "Palatino Linotype", "Monospace"].map((font) => (
+                                <option key={font} value={font}>
+                                    {font}
+                                </option>
+                            ))}
                     </select>
 
-
+                    {/* Color Picker */}
                     <input
                         type="color"
+                        defaultValue={activeText.fill}
                         onChange={(e) => updateTextStyle("fill", e.target.value)}
                         className="w-10 h-10 border-none cursor-pointer p-0 rounded-full"
                     />
                 </div>
             )}
+
+
+            {/* Animation Modal */}
+            <Dialog open={openAnimationModal} onClose={() => setOpenAnimationModal(false)}>
+                <DialogTitle>Select Animation</DialogTitle>
+                <DialogContent>
+                    <div className="flex flex-col gap-2">
+                        {textAnimations.map((animation) => (
+                            <button
+                                key={animation.key}
+                                onClick={() => handleAnimationSelect(animation)}
+                                className="p-2 bg-gray-200 rounded-md hover:bg-gray-300 transition"
+                            >
+                                {animation.name}
+                            </button>
+                        ))}
+                    </div>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenAnimationModal(false)} color="primary">
+                        Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             <input
                 type="file"
@@ -309,15 +464,14 @@ const FestivalDetail = () => {
                     <span>0 sec</span>
                     <span>5 sec</span>
                 </div>
-                
+
                 {/* Frames */}
                 <div className="flex items-center justify-between mt-2 bg-gray-100 p-2 rounded">
                     {Array.from({ length: totalFrames }).map((_, index) => (
-                        <div 
-                            key={index} 
-                            className={`w-12 h-12 border ${
-                                index === currentFrame ? "border-blue-500 bg-blue-200" : "border-gray-300"
-                            } rounded flex items-center justify-center`}
+                        <div
+                            key={index}
+                            className={`w-12 h-12 border ${index === currentFrame ? "border-blue-500 bg-blue-200" : "border-gray-300"
+                                } rounded flex items-center justify-center`}
                             onClick={() => setCurrentFrame(index)}
                         >
                             {index + 1}
@@ -327,18 +481,18 @@ const FestivalDetail = () => {
 
                 {/* Add Sound Option */}
                 <div className="mt-3">
-                    <button 
-                        onClick={() => audioInputRef.current.click()} 
+                    <button
+                        onClick={() => audioInputRef.current.click()}
                         className="text-blue-500 flex items-center"
                     >
                         Add Sound 🎵
                     </button>
-                    <input 
-                        type="file" 
-                        ref={audioInputRef} 
-                        className="hidden" 
-                        accept="audio/*" 
-                        onChange={handleAudioUpload} 
+                    <input
+                        type="file"
+                        ref={audioInputRef}
+                        className="hidden"
+                        accept="audio/*"
+                        onChange={handleAudioUpload}
                     />
                 </div>
             </div>
